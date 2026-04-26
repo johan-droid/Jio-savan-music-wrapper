@@ -100,17 +100,25 @@ app.get('/search', async (req, res) => {
       return res.json({ data: [], total: 0, query });
     }
 
-    const tracks = result.results.map(item => ({
-      id: String(item.id),
-      title: item.title || 'Unknown',
-      artist: item.primary_artists || item.singers || 'Unknown Artist',
-      album: item.album || '',
-      duration: parseDuration(item.duration),
-      thumbnail: item.image ? item.image.replace('150x150', '500x500') : '',
-      url: `https://www.jiosaavn.com/song/${item.perma_url || item.id}`,
-      stream_url: item.media_preview_url || null,
-      source: 'jiosaavn'
-    }));
+    const tracks = result.results.map(item => {
+      // Fix URL - perma_url might be full URL or just path
+      let songUrl = item.perma_url || `https://www.jiosaavn.com/song/${item.id}`;
+      if (!songUrl.startsWith('http')) {
+        songUrl = `https://www.jiosaavn.com${songUrl.startsWith('/') ? '' : '/'}${songUrl}`;
+      }
+      
+      return {
+        id: String(item.id),
+        title: item.title || 'Unknown',
+        artist: item.primary_artists || item.singers || 'Unknown Artist',
+        album: item.album || '',
+        duration: parseDuration(item.duration),
+        thumbnail: item.image ? item.image.replace('150x150', '500x500') : '',
+        url: songUrl,
+        stream_url: item.media_preview_url || item.more_info?.media_preview_url || null,
+        source: 'jiosaavn'
+      };
+    });
 
     console.log(`[SEARCH] Found ${tracks.length} results`);
 
@@ -162,18 +170,28 @@ app.get('/track/:id', async (req, res) => {
 
     const song = result.songs[0];
 
-    // Get best quality stream URL
-    let streamUrl = song.media_preview_url || null;
+    // Get best quality stream URL from multiple possible locations
+    let streamUrl = song.media_preview_url || 
+                    song.more_info?.media_preview_url ||
+                    song.media_url ||
+                    song.more_info?.vlink ||
+                    null;
 
-    // Try to get higher quality if available
-    if (song.more_info && song.more_info.encrypted_media_url) {
-      // Note: Full quality requires decryption which is complex
-      // Preview URL works for most cases
-      streamUrl = song.more_info.media_preview_url || streamUrl;
+    // Try to construct preview URL from encrypted URL if available
+    if (!streamUrl && song.more_info?.encrypted_media_url) {
+      // Preview URL pattern: replace "_96" with "_320" for higher quality or keep as is
+      streamUrl = song.more_info.encrypted_media_url;
     }
 
     if (!streamUrl) {
-      return res.status(404).json({ error: 'No stream URL available' });
+      console.log(`[TRACK] No stream URL for: ${song.title}`);
+      return res.status(404).json({ error: 'No stream URL available', id: songId });
+    }
+
+    // Fix URL construction
+    let songUrl = song.perma_url || `https://www.jiosaavn.com/song/${songId}`;
+    if (!songUrl.startsWith('http')) {
+      songUrl = `https://www.jiosaavn.com${songUrl.startsWith('/') ? '' : '/'}${songUrl}`;
     }
 
     console.log(`[TRACK] Success: ${song.title}`);
@@ -186,7 +204,7 @@ app.get('/track/:id', async (req, res) => {
       duration: parseDuration(song.duration),
       stream_url: streamUrl,
       thumbnail: song.image ? song.image.replace('150x150', '500x500') : '',
-      url: `https://www.jiosaavn.com/song/${song.perma_url || songId}`,
+      url: songUrl,
       source: 'jiosaavn'
     });
 

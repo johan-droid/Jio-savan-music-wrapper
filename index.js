@@ -43,28 +43,34 @@ async function makeRequest(params) {
 
 /**
  * Decrypt JioSaavn encrypted media URL
- * JioSaavn uses base64 encoded URLs with quality markers
+ * JioSaavn uses base64 encoded URLs
  */
 function decryptJioSaavnUrl(encryptedUrl) {
   if (!encryptedUrl) return null;
   
   try {
-    // Decode base64
-    const decoded = Buffer.from(encryptedUrl, 'base64').toString('utf-8');
+    // Decode base64 - JioSaavn URLs are base64 encoded
+    let decoded = Buffer.from(encryptedUrl, 'base64').toString('utf-8');
     
-    // Replace quality marker for 320kbps
-    // Pattern: _96.mp4 -> _320.mp4 or _160.mp4 -> _320.mp4
-    const highQuality = decoded.replace(/_(96|160|320)\.mp4/g, '_320.mp4');
-    
-    // Ensure HTTPS
-    if (highQuality.startsWith('http://')) {
-      return highQuality.replace('http://', 'https://');
+    // Check if it looks like a valid URL
+    if (!decoded.startsWith('http')) {
+      console.log('[DECRYPT] Decoded value is not a URL, using preview URL instead');
+      return null;
     }
     
-    return highQuality;
+    // Replace quality marker for higher quality (96->320, 160->320)
+    decoded = decoded.replace(/_96\.mp4/g, '_320.mp4');
+    decoded = decoded.replace(/_160\.mp4/g, '_320.mp4');
+    
+    // Ensure HTTPS
+    if (decoded.startsWith('http://')) {
+      decoded = decoded.replace('http://', 'https://');
+    }
+    
+    return decoded;
   } catch (error) {
     console.error('[DECRYPT] Failed to decrypt URL:', error.message);
-    return encryptedUrl; // Return original if decryption fails
+    return null;
   }
 }
 

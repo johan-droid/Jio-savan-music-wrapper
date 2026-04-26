@@ -42,6 +42,33 @@ async function makeRequest(params) {
 }
 
 /**
+ * Decrypt JioSaavn encrypted media URL
+ * JioSaavn uses base64 encoded URLs with quality markers
+ */
+function decryptJioSaavnUrl(encryptedUrl) {
+  if (!encryptedUrl) return null;
+  
+  try {
+    // Decode base64
+    const decoded = Buffer.from(encryptedUrl, 'base64').toString('utf-8');
+    
+    // Replace quality marker for 320kbps
+    // Pattern: _96.mp4 -> _320.mp4 or _160.mp4 -> _320.mp4
+    const highQuality = decoded.replace(/_(96|160|320)\.mp4/g, '_320.mp4');
+    
+    // Ensure HTTPS
+    if (highQuality.startsWith('http://')) {
+      return highQuality.replace('http://', 'https://');
+    }
+    
+    return highQuality;
+  } catch (error) {
+    console.error('[DECRYPT] Failed to decrypt URL:', error.message);
+    return encryptedUrl; // Return original if decryption fails
+  }
+}
+
+/**
  * Parse duration string to seconds
  */
 function parseDuration(durationStr) {
@@ -171,16 +198,22 @@ app.get('/track/:id', async (req, res) => {
     const song = result.songs[0];
 
     // Get best quality stream URL from multiple possible locations
-    let streamUrl = song.media_preview_url || 
-                    song.more_info?.media_preview_url ||
-                    song.media_url ||
-                    song.more_info?.vlink ||
-                    null;
-
-    // Try to construct preview URL from encrypted URL if available
-    if (!streamUrl && song.more_info?.encrypted_media_url) {
-      // Preview URL pattern: replace "_96" with "_320" for higher quality or keep as is
-      streamUrl = song.more_info.encrypted_media_url;
+    // PRIORITY: Decrypted encrypted URL > preview URL > other sources
+    let streamUrl = null;
+    
+    // Try to decrypt encrypted media URL first (best quality, no geo-restriction)
+    if (song.more_info?.encrypted_media_url) {
+      streamUrl = decryptJioSaavnUrl(song.more_info.encrypted_media_url);
+      console.log(`[TRACK] Decrypted URL for ${song.title}: ${streamUrl ? 'success' : 'failed'}`);
+    }
+    
+    // Fallback to preview URL if decryption failed
+    if (!streamUrl) {
+      streamUrl = song.media_preview_url || 
+                  song.more_info?.media_preview_url ||
+                  song.media_url ||
+                  song.more_info?.vlink ||
+                  null;
     }
 
     if (!streamUrl) {

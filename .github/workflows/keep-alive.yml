@@ -12,4 +12,4 @@ jobs:
       - name: Ping JioSaavn Wrapper
         run: |
           echo "Pinging JioSaavn wrapper to keep it alive..."
-          curl -s -o /dev/null -w "%{http_code}" https://jiosaavn-music-wrapper.onrender.com/ || echo "Ping failed"
+          curl -s -o /dev/null -w "%{http_code}" https://jio-savan-music-wrapper.onrender.com/ || echo "Ping failed"

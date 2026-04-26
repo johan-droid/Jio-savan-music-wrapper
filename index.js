@@ -207,20 +207,32 @@ app.get('/track/:id', async (req, res) => {
     // PRIORITY: Decrypted encrypted URL > preview URL > other sources
     let streamUrl = null;
     
+    console.log(`[TRACK] Looking for stream URL for: ${song.title}`);
+    console.log(`[TRACK] encrypted_media_url exists: ${!!song.more_info?.encrypted_media_url}`);
+    console.log(`[TRACK] media_preview_url exists: ${!!song.media_preview_url}`);
+    
     // Try to decrypt encrypted media URL first (best quality, no geo-restriction)
     if (song.more_info?.encrypted_media_url) {
-      streamUrl = decryptJioSaavnUrl(song.more_info.encrypted_media_url);
-      console.log(`[TRACK] Decrypted URL for ${song.title}: ${streamUrl ? 'success' : 'failed'}`);
+      const encrypted = song.more_info.encrypted_media_url;
+      console.log(`[TRACK] Attempting to decrypt, encrypted length: ${encrypted.length}`);
+      streamUrl = decryptJioSaavnUrl(encrypted);
+      console.log(`[TRACK] Decryption result: ${streamUrl ? 'SUCCESS' : 'FAILED'}`);
+      if (streamUrl) {
+        console.log(`[TRACK] Decrypted URL starts with: ${streamUrl.substring(0, 50)}...`);
+      }
     }
     
     // Fallback to preview URL if decryption failed
     if (!streamUrl) {
+      console.log(`[TRACK] Falling back to preview URL`);
       streamUrl = song.media_preview_url || 
                   song.more_info?.media_preview_url ||
                   song.media_url ||
                   song.more_info?.vlink ||
                   null;
     }
+    
+    console.log(`[TRACK] Final stream URL: ${streamUrl ? streamUrl.substring(0, 60) + '...' : 'NONE'}`);
 
     if (!streamUrl) {
       console.log(`[TRACK] No stream URL for: ${song.title}`);

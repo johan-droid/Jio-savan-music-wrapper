@@ -7,6 +7,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const { parseDuration } = require('./utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -74,19 +75,6 @@ function decryptJioSaavnUrl(encryptedUrl) {
   }
 }
 
-/**
- * Parse duration string to seconds
- */
-function parseDuration(durationStr) {
-  if (!durationStr) return 0;
-  const parts = durationStr.split(':');
-  if (parts.length === 2) {
-    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-  } else if (parts.length === 3) {
-    return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
-  }
-  return parseInt(durationStr) || 0;
-}
 
 /**
  * Health check endpoint
@@ -327,13 +315,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🎵 JioSaavn Music Wrapper running on port ${PORT}`);
-  console.log(`🎼 Specialized in Indian/Bollywood music`);
-  console.log('');
-  console.log('Endpoints:');
-  console.log('  GET /                    - Health check');
-  console.log('  GET /search?q=<query>    - Search songs');
-  console.log('  GET /track/:id           - Get song by ID');
-  console.log('  GET /album/:id           - Get album details');
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🎵 JioSaavn Music Wrapper running on port ${PORT}`);
+    console.log(`🎼 Specialized in Indian/Bollywood music`);
+    console.log('');
+    console.log('Endpoints:');
+    console.log('  GET /                    - Health check');
+    console.log('  GET /search?q=<query>    - Search songs');
+    console.log('  GET /track/:id           - Get song by ID');
+    console.log('  GET /album/:id           - Get album details');
+  });
+}

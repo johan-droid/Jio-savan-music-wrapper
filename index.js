@@ -165,7 +165,6 @@ app.get('/search', async (req, res) => {
     console.error('[SEARCH] Error:', error.message);
     res.status(500).json({
       error: 'Search failed',
-      message: error.message,
       data: [],
       total: 0
     });
@@ -262,8 +261,7 @@ app.get('/track/:id', async (req, res) => {
   } catch (error) {
     console.error('[TRACK] Error:', error.message);
     res.status(500).json({
-      error: 'Extraction failed',
-      message: error.message
+      error: 'Extraction failed'
     });
   }
 });
@@ -317,7 +315,7 @@ app.get('/album/:id', async (req, res) => {
 
   } catch (error) {
     console.error('[ALBUM] Error:', error.message);
-    res.status(500).json({ error: 'Failed to get album', message: error.message });
+    res.status(500).json({ error: 'Failed to get album' });
   }
 });
 
@@ -327,13 +325,17 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🎵 JioSaavn Music Wrapper running on port ${PORT}`);
-  console.log(`🎼 Specialized in Indian/Bollywood music`);
-  console.log('');
-  console.log('Endpoints:');
-  console.log('  GET /                    - Health check');
-  console.log('  GET /search?q=<query>    - Search songs');
-  console.log('  GET /track/:id           - Get song by ID');
-  console.log('  GET /album/:id           - Get album details');
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🎵 JioSaavn Music Wrapper running on port ${PORT}`);
+    console.log(`🎼 Specialized in Indian/Bollywood music`);
+    console.log('');
+    console.log('Endpoints:');
+    console.log('  GET /                    - Health check');
+    console.log('  GET /search?q=<query>    - Search songs');
+    console.log('  GET /track/:id           - Get song by ID');
+    console.log('  GET /album/:id           - Get album details');
+  });
+}
+
+module.exports = app;

@@ -7,6 +7,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const CryptoJS = require('crypto-js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -43,24 +44,37 @@ async function makeRequest(params) {
 
 /**
  * Decrypt JioSaavn encrypted media URL
- * JioSaavn uses base64 encoded URLs
+ * JioSaavn uses DES-ECB encryption with a specific key
  */
 function decryptJioSaavnUrl(encryptedUrl) {
   if (!encryptedUrl) return null;
   
   try {
-    // Decode base64 - JioSaavn URLs are base64 encoded
-    let decoded = Buffer.from(encryptedUrl, 'base64').toString('utf-8');
+    const key = '38346b346c336d31';
+    const keyHex = CryptoJS.enc.Utf8.parse(key);
     
-    // Check if it looks like a valid URL
-    if (!decoded.startsWith('http')) {
-      console.log('[DECRYPT] Decoded value is not a URL, using preview URL instead');
+    // Decrypt using DES-ECB
+    const decrypted = CryptoJS.DES.decrypt(
+      { ciphertext: CryptoJS.enc.Base64.parse(encryptedUrl) },
+      keyHex,
+      {
+        mode: CryptoJS.mode.ECB,
+        padding: CryptoJS.pad.Pkcs7
+      }
+    );
+    
+    let decoded = decrypted.toString(CryptoJS.enc.Utf8);
+    
+    if (!decoded || !decoded.startsWith('http')) {
+      console.log('[DECRYPT] Decryption failed or result is not a URL');
       return null;
     }
     
-    // Replace quality marker for higher quality (96->320, 160->320)
-    decoded = decoded.replace(/_96\.mp4/g, '_320.mp4');
-    decoded = decoded.replace(/_160\.mp4/g, '_320.mp4');
+    // Replace quality markers for maximum quality
+    decoded = decoded.replace('_96.mp4', '_320.mp4')
+                     .replace('_160.mp4', '_320.mp4')
+                     .replace('_96.m4a', '_320.m4a')
+                     .replace('_160.m4a', '_320.m4a');
     
     // Ensure HTTPS
     if (decoded.startsWith('http://')) {
@@ -95,8 +109,8 @@ app.get('/', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'jiosaavn-music-wrapper',
-    version: '1.0.0',
-    description: 'Indian/Bollywood music extraction via JioSaavn'
+    version: '1.1.0',
+    description: 'Indian/Bollywood music extraction via JioSaavn with DES decryption'
   });
 });
 
@@ -207,35 +221,21 @@ app.get('/track/:id', async (req, res) => {
     // PRIORITY: Decrypted encrypted URL > preview URL > other sources
     let streamUrl = null;
     
-    console.log(`[TRACK] Looking for stream URL for: ${song.title}`);
-    console.log(`[TRACK] encrypted_media_url exists: ${!!song.more_info?.encrypted_media_url}`);
-    console.log(`[TRACK] media_preview_url exists: ${!!song.media_preview_url}`);
-    
     // Try to decrypt encrypted media URL first (best quality, no geo-restriction)
     if (song.more_info?.encrypted_media_url) {
-      const encrypted = song.more_info.encrypted_media_url;
-      console.log(`[TRACK] Attempting to decrypt, encrypted length: ${encrypted.length}`);
-      streamUrl = decryptJioSaavnUrl(encrypted);
-      console.log(`[TRACK] Decryption result: ${streamUrl ? 'SUCCESS' : 'FAILED'}`);
-      if (streamUrl) {
-        console.log(`[TRACK] Decrypted URL starts with: ${streamUrl.substring(0, 50)}...`);
-      }
+      streamUrl = decryptJioSaavnUrl(song.more_info.encrypted_media_url);
     }
     
     // Fallback to preview URL if decryption failed
     if (!streamUrl) {
-      console.log(`[TRACK] Falling back to preview URL`);
       streamUrl = song.media_preview_url || 
                   song.more_info?.media_preview_url ||
                   song.media_url ||
                   song.more_info?.vlink ||
                   null;
     }
-    
-    console.log(`[TRACK] Final stream URL: ${streamUrl ? streamUrl.substring(0, 60) + '...' : 'NONE'}`);
 
     if (!streamUrl) {
-      console.log(`[TRACK] No stream URL for: ${song.title}`);
       return res.status(404).json({ error: 'No stream URL available', id: songId });
     }
 
@@ -244,8 +244,6 @@ app.get('/track/:id', async (req, res) => {
     if (!songUrl.startsWith('http')) {
       songUrl = `https://www.jiosaavn.com${songUrl.startsWith('/') ? '' : '/'}${songUrl}`;
     }
-
-    console.log(`[TRACK] Success: ${song.title}`);
 
     res.json({
       id: String(songId),
@@ -330,10 +328,4 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🎵 JioSaavn Music Wrapper running on port ${PORT}`);
   console.log(`🎼 Specialized in Indian/Bollywood music`);
-  console.log('');
-  console.log('Endpoints:');
-  console.log('  GET /                    - Health check');
-  console.log('  GET /search?q=<query>    - Search songs');
-  console.log('  GET /track/:id           - Get song by ID');
-  console.log('  GET /album/:id           - Get album details');
 });
